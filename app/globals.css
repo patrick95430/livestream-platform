@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui,
+    sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/*
+ * 濾鏡：RoomStage 在 .video-stage 上設 --video-filter，
+ * 這裡讓它套到所有影像元素。
+ *
+ * 限制：這只改本機看到的畫面，送出去的串流沒有變。
+ * 要讓觀眾也看到濾鏡，必須在送出前處理視訊軌。
+ */
+.video-stage video {
+  filter: var(--video-filter, none);
+}
+
+/* 禮物往上飄的動畫。只動 transform 和 opacity，不會觸發重新排版。 */
+@keyframes gift-float {
+  0% {
+    transform: translateY(0) scale(0.8);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(-20px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-260px) scale(1.1);
+    opacity: 0;
+  }
+}
+
+.gift-float {
+  animation-name: gift-float;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
+
+/* 使用者在系統設定裡關掉動態效果時，不要硬播動畫 */
+@media (prefers-reduced-motion: reduce) {
+  .gift-float {
+    animation-duration: 1ms !important;
+    opacity: 1;
+  }
+}
