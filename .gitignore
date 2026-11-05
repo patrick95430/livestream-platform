@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.example 只有變數名稱、沒有值，要進 git 讓隊友知道要填哪些變數。
+# 上一行的 .env* 會比對到它，所以要用 ! 排除。
+!.env.example
 
 # vercel
 .vercel

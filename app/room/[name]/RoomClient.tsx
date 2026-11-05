@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { LiveKitRoom } from '@livekit/components-react';
 import '@livekit/components-styles';
 import RoomStage from './RoomStage';
@@ -19,26 +20,31 @@ type TokenResponse = {
  * 有期限、有指定房間和權限的通行證。
  */
 export default function RoomClient({ roomName }: { roomName: string }) {
+  const router = useRouter();
   const [token, setToken] = useState<string>();
   const [serverUrl, setServerUrl] = useState<string>();
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    // TODO 步驟 4：接上 Supabase 之後，identity 改成真實使用者 id，
-    // 而且要由伺服器從 session 讀，不要由前端傳。
-    const suffix = Math.random().toString(36).slice(2, 7);
-    const identity = `guest-${suffix}`;
-
     let cancelled = false;
 
+    // 只傳房間名稱。身分由伺服器從登入的 cookie 讀，前端不傳 identity。
     fetch('/api/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roomName, identity, name: `訪客 ${suffix}` }),
+      body: JSON.stringify({ roomName }),
     })
-      .then((res) => res.json() as Promise<TokenResponse>)
+      .then(async (res) => {
+        if (res.status === 401) {
+          // 沒登入：帶著回來的路徑去登入頁，登入後回到這個房間
+          const back = `/room/${encodeURIComponent(roomName)}`;
+          router.replace(`/login?next=${encodeURIComponent(back)}`);
+          return null;
+        }
+        return (await res.json()) as TokenResponse;
+      })
       .then((data) => {
-        if (cancelled) return;
+        if (cancelled || !data) return;
         if (data.error || !data.token || !data.serverUrl) {
           setError(data.error ?? '伺服器沒有回傳 token');
           return;
@@ -53,7 +59,7 @@ export default function RoomClient({ roomName }: { roomName: string }) {
     return () => {
       cancelled = true;
     };
-  }, [roomName]);
+  }, [roomName, router]);
 
   if (error) {
     return (
