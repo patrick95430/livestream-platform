@@ -320,6 +320,10 @@ git push -u origin main
 
 ### 4-1　Supabase 設定（B）
 
+> **已實作**：用 `supabase/migrations/20261104000000_step4_auth_points.sql` 取代下面這段 SQL。
+> 差異：`rooms.name` 加 unique、拿掉 `is_live`、加註冊 trigger、RLS、`send_gift` / `refund_gift`。
+> 驗證方式見 `docs/VERIFY.md`。
+
 建專案後，在 SQL Editor 建三張表：
 
 ```sql

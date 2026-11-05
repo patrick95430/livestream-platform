@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import type { RoomSummary } from './api/rooms/route';
+import { createClient } from '@/lib/supabase/client';
+
+type Me = { id: string; nickname: string; points: number };
 
 /**
- * 首頁：建立房間，以及正在直播的房間列表。
+ * 首頁：登入狀態、建立房間、正在直播的房間列表。
  *
- * 房間列表現在直接問 LiveKit 要「目前有人的房間」，所以不用資料庫
- * 就有一個會動的首頁。步驟 4 接上 Supabase 之後改成讀 rooms 資料表，
- * 才能存房名、房主和開播時間。
+ * 房間列表由 /api/rooms 合併兩個來源：LiveKit（現在有沒有人）與
+ * Supabase rooms 表（房主、建立時間）。建房要登入，房主由伺服器從 session 決定。
  */
 export default function HomeClient() {
   const router = useRouter();
@@ -17,6 +20,30 @@ export default function HomeClient() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  // undefined = 還在問伺服器；null = 沒登入
+  const [me, setMe] = useState<Me | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/me')
+      .then((res) => (res.ok ? (res.json() as Promise<Me>) : null))
+      .then((data) => {
+        if (!cancelled) setMe(data);
+      })
+      .catch(() => {
+        if (!cancelled) setMe(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function signOut() {
+    // 清掉瀏覽器上的 session cookie，並通知 Supabase 讓 refresh token 失效
+    await createClient().auth.signOut();
+    setMe(null);
+    router.refresh();
+  }
 
   const loadRooms = useCallback(async () => {
     try {
@@ -57,6 +84,11 @@ export default function HomeClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmed }),
       });
+      if (res.status === 401) {
+        router.push('/login?next=/');
+        return;
+      }
+
       const data: { name?: string; error?: string } = await res.json();
 
       if (data.error) {
@@ -71,10 +103,32 @@ export default function HomeClient() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-2xl px-6 py-14 text-neutral-100">
-      <h1 className="text-3xl font-medium">低延遲直播平台</h1>
-      <p className="mt-2 text-sm text-neutral-400">
-        兩個人隔著不同網路，合唱一首歌
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-medium">低延遲直播平台</h1>
+          <p className="mt-2 text-sm text-neutral-400">
+            兩個人隔著不同網路，合唱一首歌
+          </p>
+        </div>
+
+        <div className="shrink-0 text-right text-sm">
+          {me === undefined ? null : me === null ? (
+            <Link href="/login" className="text-sky-400 hover:underline">
+              登入／註冊
+            </Link>
+          ) : (
+            <>
+              <p className="text-neutral-200">{me.nickname}</p>
+              <p className="text-xs text-neutral-400">
+                <span className="text-amber-400">{me.points}</span> 點・
+                <button onClick={signOut} className="hover:text-neutral-200 hover:underline">
+                  登出
+                </button>
+              </p>
+            </>
+          )}
+        </div>
+      </div>
 
       <form onSubmit={createRoom} className="mt-8 flex gap-2">
         <input
@@ -115,7 +169,14 @@ export default function HomeClient() {
                   href={`/room/${encodeURIComponent(room.name)}`}
                   className="flex items-center justify-between rounded border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-sky-600"
                 >
-                  <span className="font-medium">{room.name}</span>
+                  <span>
+                    <span className="font-medium">{room.name}</span>
+                    {room.hostNickname && (
+                      <span className="ml-2 text-xs text-neutral-500">
+                        房主 {room.hostNickname}
+                      </span>
+                    )}
+                  </span>
                   <span className="text-sm text-neutral-400">
                     {room.numParticipants} 人在線
                   </span>
